@@ -5,6 +5,7 @@ import joblib
 import json
 import shap
 import plotly.graph_objects as go
+from groq import Groq
 
 st.set_page_config(
     page_title="Economic Resilience Predictor",
@@ -41,8 +42,23 @@ st.markdown("""
         color: #1a1a1a;
         font-weight: 700;
     }
-    p, li, span {
+        p, li, span {
         color: #1a1a1a;
+    }
+    .stChatInput textarea {
+        color: #ffffff;
+        min-height: 40px !important;
+        padding: 8px 12px !important;
+    }
+    div[data-testid="stChatInput"] {
+        max-width: 700px !important;
+        margin: 0 auto !important;
+    }
+        .stButton button {
+        color: #ffffff !important;
+    }
+    .stButton button p {
+        color: #ffffff !important;
     }
         [data-testid="stHeader"] {
         background-color: #4a5d3a;
@@ -114,6 +130,12 @@ selected_country = st.selectbox(
 )
 
 st.write(f"You selected: **{selected_country}**")
+if "last_country" not in st.session_state:
+    st.session_state.last_country = selected_country
+
+if st.session_state.last_country != selected_country:
+    st.session_state.chat_history = []
+    st.session_state.last_country = selected_country
 
 # --- Load pre-cleaned country profiles (matches notebook's imputation exactly) ---
 @st.cache_data
@@ -335,3 +357,74 @@ st.caption(
     "Built with Streamlit · Random Forest model trained on a synthetic "
     "island economies dataset · Capstone Project 2026"
 )
+
+st.divider()
+st.subheader("💬 Ask About This Prediction")
+
+groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+st.write("Try asking:")
+btn_col1, btn_col2, btn_col3 = st.columns(3)
+with btn_col1:
+    if st.button("Why this prediction?"):
+        st.session_state.pending_question = f"Why is the prediction for {selected_country} what it is?"
+with btn_col2:
+    if st.button("What matters most?"):
+        st.session_state.pending_question = "What features matter most to this model?"
+with btn_col3:
+    if st.button("Explain diversification"):
+        st.session_state.pending_question = "What does the Diversification Index mean, and how does it relate to growth?"
+
+for msg in st.session_state.chat_history:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+typed_question = st.text_input("Or ask your own question...", key="chat_text_input")
+
+if "pending_question" in st.session_state:
+    user_question = st.session_state.pending_question
+    del st.session_state.pending_question
+elif typed_question and typed_question != st.session_state.get("last_typed_question", ""):
+    user_question = typed_question
+    st.session_state.last_typed_question = typed_question
+else:
+    user_question = None
+
+if user_question:
+    st.session_state.chat_history.append({"role": "user", "content": user_question})
+    with st.chat_message("user"):
+        st.write(user_question)
+
+    system_context = f"""You are an assistant explaining a machine learning model's predictions for a capstone project on economic resilience in tourism-dependent island economies.
+
+Current context:
+- Selected country: {selected_country}
+- Current structure prediction: {scenario_results['A. Current structure']:.2f}% (5-year avg GDP growth)
+- Moderate diversification prediction: {scenario_results['B. Moderate diversification']:.2f}%
+- Strong diversification prediction: {scenario_results['C. Strong diversification']:.2f}%
+- Model: Random Forest, R² = 0.823 on held-out test data
+- Key features (highest importance): Diversification_Index, Agriculture_pct_GDP, Services_pct_GDP
+- Diversification rank: {selected_country} is one of 15 core island economies studied; Maldives specifically ranks 11th of 15 on diversification, below the peer median
+- Econometric finding: Diversification is positively and significantly associated with next-year GDP growth across all model specifications tested (Pooled OLS, Fixed Effects, Random Effects)
+- Dataset: synthetic prototype, for methodological demonstration only
+
+Only state specific numbers or facts explicitly given in this context above. If asked about something not covered here (e.g. specific SHAP values, econometric model results, or peer country comparisons), say you don't have that specific detail available in this view, rather than guessing.
+
+
+Answer only questions related to this model, its predictions, its features, or economic resilience/diversification concepts. Keep answers concise (2-4 sentences). If asked something unrelated, politely redirect to the topic of this app."""
+
+    response = groq_client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[
+            {"role": "system", "content": system_context},
+            *st.session_state.chat_history
+        ],
+    )
+    answer = response.choices[0].message.content
+
+    st.session_state.chat_history.append({"role": "assistant", "content": answer})
+    with st.chat_message("assistant"):
+        st.write(answer)
