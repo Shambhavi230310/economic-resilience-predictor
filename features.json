@@ -1,0 +1,17 @@
+[
+  "Diversification_Index",
+  "Agriculture_pct_GDP",
+  "Services_pct_GDP",
+  "Diversification_Index_lag1",
+  "GDP_per_Capita_USD",
+  "Industry_pct_GDP",
+  "Manufacturing_pct_GDP",
+  "Mobile_Subs_per_100",
+  "Is_SIDS",
+  "Internet_Users_pct",
+  "Population",
+  "Arrivals_per_Capita",
+  "Global_Shock_Year",
+  "Unemployment_pct",
+  "Tourism_Receipts_pct_GDP"
+]
